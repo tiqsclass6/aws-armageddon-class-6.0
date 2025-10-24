@@ -2,7 +2,7 @@
 # File: install-kubernetes-monitoring.sh
 # Description: Automated installation of Prometheus, Grafana, and Envoy Gateway on Kubernetes
 # Author: T.I.Q.S.
-# Version: 2.0
+# Version: 2.1
 # Usage: bash install-kubernetes-monitoring.sh
 
 set -euo pipefail
@@ -39,29 +39,49 @@ spacer
 
 subsection "Install Prometheus & Grafana (kube-prometheus-stack)"
 info "Installing kube-prometheus-stack (Prometheus + Grafana)..."
-helm install monitoring prometheus-community/kube-prometheus-stack   --namespace observability   --create-namespace   --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName="gp2"   --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage="50Gi"   --set prometheus.service.type=LoadBalancer   --set grafana.service.type=LoadBalancer   --set grafana.persistence.enabled=true   --set grafana.persistence.storageClassName="gp2"   --set alertmanager.alertmanagerSpec.storage.volumeClaimTemplate.spec.storageClassName="gp2"   --set alertmanager.alertmanagerSpec.storage.volumeClaimTemplate.spec.resources.requests.storage="10Gi"
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace observability \
+  --create-namespace \
+  --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName="gp2" \
+  --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage="50Gi" \
+  --set prometheus.service.type=LoadBalancer \
+  --set grafana.service.type=LoadBalancer \
+  --set grafana.persistence.enabled=true \
+  --set grafana.persistence.storageClassName="gp2" \
+  --set alertmanager.alertmanagerSpec.storage.volumeClaimTemplate.spec.storageClassName="gp2" \
+  --set alertmanager.alertmanagerSpec.storage.volumeClaimTemplate.spec.resources.requests.storage="10Gi"
 success "kube-prometheus-stack installed."
 spacer
 
 subsection "Install Envoy Gateway"
 info "Installing Envoy Gateway (v1.5.3)..."
-helm install eg oci://docker.io/envoyproxy/gateway-helm   --version v1.5.3   --namespace envoy-gateway-system   --create-namespace
+helm install eg oci://docker.io/envoyproxy/gateway-helm \
+  --version v1.5.3 \
+  --namespace envoy-gateway-system \
+  --create-namespace
 success "Envoy Gateway chart installed."
 spacer
 
 info "Waiting up to 5m for Envoy Gateway deployment to become Available..."
-kubectl wait --timeout=5m   --namespace envoy-gateway-system   --for=condition=Available   deployment/envoy-gateway
+kubectl wait \
+  --namespace envoy-gateway-system \
+  --for=condition=Available \
+  --timeout=5m \
+  deployment/envoy-gateway
 success "Envoy Gateway is Available."
 spacer
 
 subsection "Apply Envoy Gateway Quickstart"
 info "Applying Envoy Gateway quickstart configuration..."
-kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.5.3/quickstart.yaml   --namespace default
+kubectl apply \
+  -f https://github.com/envoyproxy/gateway/releases/download/v1.5.3/quickstart.yaml \
+  --namespace default
 success "Quickstart configuration applied."
 spacer
 
 subsection "Create ServiceMonitor for Envoy Metrics"
 info "Creating ServiceMonitor (observability/envoy-gateway)..."
+
 cat <<EOF | kubectl apply -f -
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -76,35 +96,49 @@ spec:
       app.kubernetes.io/name: envoy-gateway
   namespaceSelector:
     matchNames:
-    - envoy-gateway-system
+      - envoy-gateway-system
   endpoints:
-  - port: metrics
-    path: /stats/prometheus
-    interval: 15s
+    - port: metrics
+      path: /stats/prometheus
+      interval: 15s
 EOF
+
 success "ServiceMonitor created."
 spacer
 
 subsection "Verify Observability Namespace Resources"
 info "Listing Pods (release=monitoring)..."
-kubectl get pods --namespace observability --selector release=monitoring || warn "No pods found yet."
+kubectl get pods \
+  --namespace observability \
+  --selector release=monitoring \
+  || warn "No pods found yet."
 spacer
 
 info "Listing StatefulSets..."
-kubectl get statefulsets --namespace observability || warn "No StatefulSets found."
+kubectl get statefulsets \
+  --namespace observability \
+  || warn "No StatefulSets found."
 spacer
 
 info "Listing DaemonSets..."
-kubectl get daemonsets --namespace observability || warn "No DaemonSets found."
+kubectl get daemonsets \
+  --namespace observability \
+  || warn "No DaemonSets found."
 spacer
 
 info "Listing Services..."
-kubectl get services --namespace observability || warn "No Services found."
+kubectl get services \
+  --namespace observability \
+  || warn "No Services found."
 spacer
 
 subsection "Retrieve Grafana Admin Password"
 info "Fetching Grafana admin password..."
-GRAFANA_PW="$(kubectl get secret monitoring-grafana   --namespace observability   --output jsonpath='{.data.admin-password}' | base64 -d || true)"
+GRAFANA_PW="$(
+  kubectl get secret monitoring-grafana \
+    --namespace observability \
+    --output jsonpath='{.data.admin-password}' | base64 -d || true
+)"
 
 if [[ -n "${GRAFANA_PW}" ]]; then
   success "Grafana admin password: ${BOLD}${GRAFANA_PW}${RESET}"
@@ -116,8 +150,16 @@ spacer
 subsection "Retrieve LoadBalancer Service URLs"
 info "Resolving Grafana and Prometheus external addresses (this may take a bit after install)..."
 
-GRAFANA_HOST="$(kubectl get service monitoring-grafana   --namespace observability   --output jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
-PROM_HOST="$(kubectl get service monitoring-kube-prometheus-prometheus   --namespace observability   --output jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+GRAFANA_HOST="$(
+  kubectl get service monitoring-grafana \
+    --namespace observability \
+    --output jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true
+)"
+PROM_HOST="$(
+  kubectl get service monitoring-kube-prometheus-prometheus \
+    --namespace observability \
+    --output jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true
+)"
 
 GRAFANA_URL="http://${GRAFANA_HOST:-<pending>}:80"
 PROM_URL="http://${PROM_HOST:-<pending>}:9090"

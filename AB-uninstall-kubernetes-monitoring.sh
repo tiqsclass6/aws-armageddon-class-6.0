@@ -2,7 +2,7 @@
 # File: AB-uninstall-kubernetes-monitoring.sh
 # Description: Uninstalls Envoy Gateway and the kube-prometheus-stack (Prometheus + Grafana)
 # Author: T.I.Q.S.
-# Version: 2.1
+# Version: 2.2
 # Usage: bash AB-uninstall-kubernetes-monitoring.sh
 #
 # Notes:
@@ -65,14 +65,19 @@ section "🧹 Uninstalling Kubernetes Monitoring (Envoy + Prometheus/Grafana)"
 # ----------------------------------------
 subsection "Delete Envoy Gateway quickstart configuration"
 info "Deleting Envoy quickstart resources (namespace: default)..."
-kubectl delete -f https://github.com/envoyproxy/gateway/releases/download/v1.5.3/quickstart.yaml   --namespace default   --ignore-not-found=true
+kubectl delete -f \
+  https://github.com/envoyproxy/gateway/releases/download/v1.5.3/quickstart.yaml \
+  --namespace default \
+  --ignore-not-found=true
 success "Envoy quickstart deleted (or not present)."
 spacer
 
 # ----------------------------------------
 subsection "Delete ServiceMonitor for Envoy Gateway"
 info "Deleting ServiceMonitor 'envoy-gateway' (namespace: observability)..."
-kubectl delete servicemonitor envoy-gateway   --namespace observability   --ignore-not-found=true
+kubectl delete servicemonitor envoy-gateway \
+  --namespace observability \
+  --ignore-not-found=true
 success "ServiceMonitor deleted (or not present)."
 spacer
 
@@ -82,7 +87,8 @@ helm_uninstall_if_exists "eg" "envoy-gateway-system"
 spacer
 
 info "Deleting namespace 'envoy-gateway-system'..."
-kubectl delete namespace envoy-gateway-system --ignore-not-found=true
+kubectl delete namespace envoy-gateway-system \
+  --ignore-not-found=true
 wait_for_namespace_deletion "envoy-gateway-system" 180
 spacer
 
@@ -92,7 +98,8 @@ helm_uninstall_if_exists "monitoring" "observability"
 spacer
 
 info "Deleting namespace 'observability'..."
-kubectl delete namespace observability --ignore-not-found=true
+kubectl delete namespace observability \
+  --ignore-not-found=true
 wait_for_namespace_deletion "observability" 240
 spacer
 

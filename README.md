@@ -189,8 +189,6 @@ Expected outputs:
 - `monitoring-grafana`
 - `envoy-gateway`
 
-**Sample Screenshot:**  
-
 ---
 
 ### Step 4 – Access Grafana & Prometheus
