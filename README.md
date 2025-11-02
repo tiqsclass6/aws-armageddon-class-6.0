@@ -220,7 +220,7 @@ kubectl get secret monitoring-grafana \
 
 A full walkthrough of deployment and monitoring verification is available:  
 
-[![Armageddon Demo](https://img.youtube.com/vi/Vf4_W0NknNo/0.jpg)](https://www.youtube.com/watch?v=Vf4_W0NknNo)
+[![Armageddon Demo](https://img.youtube.com/vi/Ur_WtZtClqc/0.jpg)](https://www.youtube.com/watch?v=Ur_WtZtClqc)
 
 ---
 
