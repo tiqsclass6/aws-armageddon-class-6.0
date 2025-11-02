@@ -66,9 +66,6 @@ By the end of this task, the Network team should be able to:
 
 ```plaintext
 ARMAGEDDON 2.0/
-├── 1-prometheus/                             # Optional Helm configs or manifests
-├── A-namespaces/                             # Namespace setup definitions
-├── B-service-accounts/                       # IAM and Kubernetes service accounts
 ├── Screenshots/                              # Evidence & walkthrough images
 │   ├── demo.jpg
 │   ├── install-pt1.jpg

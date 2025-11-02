@@ -20,9 +20,6 @@ This guide outlines the steps to deploy, manage, and remove a Kubernetes monitor
 
 ```plaintext
 ├── ARMAGEDDON 6.0
-│   ├── 1-prometheus
-│   ├── A-namespaces
-│   ├── B-service-accounts
 │   ├── terraform
 │   │   ├── .gitignore
 │   │   ├── 0-var.tf
