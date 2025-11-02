@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Death Row Records – {{ artist.name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- static css -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="{{ bg_class }}">
+  <div class="page">
+    <header class="hero">
+      <img src="{{ artist.hero_image }}" alt="{{ artist.name }}" class="hero-img">
+    </header>
+
+    <section class="info-panel">
+      <h1 class="artist-name">{{ artist.name }}</h1>
+      <p class="artist-meta"><strong>Platinum Albums:</strong> {{ artist.platinum_albums }}</p>
+      <p class="artist-meta"><strong>Most Notable:</strong> {{ artist.most_notable }}</p>
+    </section>
+
+    <footer class="footer">
+      <p>Death Row Records • Armageddon 6.0 - EKS Demo</p>
+    </footer>
+  </div>
+</body>
+</html>
