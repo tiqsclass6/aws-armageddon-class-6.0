@@ -1,5 +1,6 @@
-# Connect to cluster (add proper context to kubeconfig)
+# https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource
 
+# Connect to cluster (add proper context to kubeconfig)
 resource "null_resource" "update_kubeconfig" {
   count = var.enable_kubeconfig ? 1 : 0
 
@@ -10,4 +11,3 @@ resource "null_resource" "update_kubeconfig" {
 
   depends_on = [aws_eks_cluster.demo]
 }
-

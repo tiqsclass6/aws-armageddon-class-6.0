@@ -1,3 +1,6 @@
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/subnet
+
+# Private Zone Subnets
 resource "aws_subnet" "private_zone1" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.subnet_cidr_blocks.private_zone1
@@ -22,6 +25,7 @@ resource "aws_subnet" "private_zone2" {
   }
 }
 
+# Public Zone Subnets
 resource "aws_subnet" "public_zone1" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.subnet_cidr_blocks.public_zone1

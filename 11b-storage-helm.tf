@@ -10,6 +10,9 @@ provider "helm" {
   }
 }
 
+# https://registry.terraform.io/providers/hashicorp/helm/latest/docs/resources/release
+# https://registry.terraform.io/providers/hashicorp/helm/latest/docs/guides/eks
+
 # Install EBS CSI Driver using HELM
 # Resource: Helm Release 
 resource "helm_release" "ebs_csi_driver" {

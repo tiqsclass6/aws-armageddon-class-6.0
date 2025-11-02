@@ -12,7 +12,7 @@ This guide outlines the steps to deploy, manage, and remove a Kubernetes monitor
 
 ## Demo Video
 
-[![Armageddon 6.0 Demo](demo.jpg)](https://youtu.be/3PuD6LLB7MA)
+[![Task 1 Demo](https://img.youtube.com/vi/Ur_WtZtClqc/0.jpg)](https://www.youtube.com/watch?v=Ur_WtZtClqc)
 
 ---
 

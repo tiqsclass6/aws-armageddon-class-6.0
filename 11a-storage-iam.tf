@@ -1,3 +1,7 @@
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment
+
 # Datasource: EBS CSI IAM Policy get from EBS GIT Repo (latest)
 data "http" "ebs_csi_iam_policy" {
   url = "https://raw.githubusercontent.com/kubernetes-sigs/aws-ebs-csi-driver/master/docs/example-iam-policy.json"
@@ -13,11 +17,7 @@ data "http" "ebs_csi_iam_policy" {
 #   value = data.http.ebs_csi_iam_policy.response_body
 # }
 
-
 ####################################################
-
-
-
 
 # Resource: Create EBS CSI IAM Policy 
 resource "aws_iam_policy" "ebs_csi_iam_policy" {
@@ -72,4 +72,3 @@ output "ebs_csi_iam_role_arn" {
   description = "EBS CSI IAM Role ARN"
   value       = aws_iam_role.ebs_csi_iam_role.arn
 }
-

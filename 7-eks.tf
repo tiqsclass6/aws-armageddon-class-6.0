@@ -1,3 +1,6 @@
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eks_cluster
 
 # IAM Role identity for cluster itself
 resource "aws_iam_role" "demo" {
@@ -22,7 +25,6 @@ POLICY
 
 # legacy EKS IAM Permissons (overly broad as it includes many CLB permissons)
 # [ "ec2:DescribeInstances", "ec2DescribeNetworkInterfaces", "ec2:DescribeVpcs", "ec2:DescribeDhcpOptions", "kms:DescribeKey" ]
-# https://docs.aws.amazon.com/eks/latest/userguide/service_IAM_role.html
 resource "aws_iam_role_policy_attachment" "demo-AmazonEKSClusterPolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
   role       = aws_iam_role.demo.name

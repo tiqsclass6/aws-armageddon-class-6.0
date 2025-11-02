@@ -1,3 +1,7 @@
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route_table
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route_table_association
+
+# Route Tables
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
@@ -24,6 +28,7 @@ resource "aws_route_table" "public" {
   }
 }
 
+# Route Table Associations
 resource "aws_route_table_association" "private_zone1" {
   subnet_id      = aws_subnet.private_zone1.id
   route_table_id = aws_route_table.private.id

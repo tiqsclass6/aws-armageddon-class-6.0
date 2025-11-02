@@ -1,3 +1,8 @@
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eks_node_group
+
+# IAM role for EKS worker nodes
 resource "aws_iam_role" "nodes" {
   name = "eks-node-group-nodes"
 
@@ -30,11 +35,6 @@ resource "aws_iam_role_policy_attachment" "nodes-AmazonEC2ContainerRegistryReadO
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
   role       = aws_iam_role.nodes.name
 }
-
-
-
-
-##################
 
 # Node group which is an ASG(s) managed by EKS service
 resource "aws_eks_node_group" "private-nodes" {
@@ -94,4 +94,3 @@ resource "aws_eks_node_group" "private-nodes" {
     ignore_changes = [scaling_config[0].desired_size]
   }
 }
-

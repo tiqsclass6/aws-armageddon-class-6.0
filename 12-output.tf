@@ -1,3 +1,5 @@
+# https://developer.hashicorp.com/terraform/cli/commands/output
+
 output "eks_cluster_info" {
   value = {
     name        = aws_eks_cluster.demo.name

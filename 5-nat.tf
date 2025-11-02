@@ -1,3 +1,7 @@
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eip
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/nat_gateway
+
+# Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
 
   tags = {
@@ -5,6 +9,7 @@ resource "aws_eip" "nat" {
   }
 }
 
+# NAT Gateway
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public_zone1.id

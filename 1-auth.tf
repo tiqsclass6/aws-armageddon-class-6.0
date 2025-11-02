@@ -20,8 +20,8 @@ terraform {
   }
 
   backend "s3" {
-    bucket  = "armageddon-tiqs-state-files" # Name of the S3 bucket
-    key     = "armageddon-v1.tfstate"       # The name of the state file in the bucket
+    bucket  = "your-bucket-here"            # Name of the S3 bucket
+    key     = "dateorname.tfstate"          # The name of the state file in the bucket
     region  = "us-east-1"                   # Use a variable for the region
     encrypt = true                          # Enable server-side encryption (optional but recommended)
   }

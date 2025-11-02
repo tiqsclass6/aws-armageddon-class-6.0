@@ -149,6 +149,9 @@ openid_connect_provider = {
 
 ### Step 2 – Deploy Observability Stack
 
+> [WARNING!]
+> You must run Docker Desktop before you deploy the script.
+
 Run the automated installation script:
 
 ```bash
