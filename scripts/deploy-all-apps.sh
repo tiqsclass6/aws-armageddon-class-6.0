@@ -9,10 +9,10 @@
 set -euo pipefail
 
 # -------------------------------
-# 0. Config
+# 1.) Configuration Section
 # -------------------------------
-AWS_REGION="${AWS_REGION:-us-east-1}"
-CLUSTER_NAME="${CLUSTER_NAME:-task-2}"
+AWS_REGION="${AWS_REGION:-us-east-1}"        # Update Region Here
+CLUSTER_NAME="${CLUSTER_NAME:-task-2}"       # Update Cluster Name
 MANIFEST_DIR="${MANIFEST_DIR:-manifests}"
 NAMESPACE="${NAMESPACE:-default}"
 K8S_VALIDATE="${K8S_VALIDATE:-true}"
@@ -22,7 +22,7 @@ APPS=("app1" "app2" "app3")
 PORTS=(8081 8082 8083)
 
 # -------------------------------
-# Helpers
+# 1.a) Helpers
 # -------------------------------
 info()    { echo -e "\033[1;36m[INFO]\033[0m $*"; }
 success() { echo -e "\033[1;32m[SUCCESS]\033[0m $*"; }
@@ -30,7 +30,7 @@ warn()    { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 error()   { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }
 
 # -------------------------------
-# 1. Tool checks
+# 2.) Tool checks
 # -------------------------------
 command -v aws     >/dev/null 2>&1 || error "AWS CLI not found."
 command -v docker  >/dev/null 2>&1 || error "Docker not found."
@@ -38,7 +38,7 @@ command -v kubectl >/dev/null 2>&1 || error "kubectl not found."
 command -v eksctl  >/dev/null 2>&1 || error "eksctl not found."
 
 # ------------------------------------------------------
-# 2. STS preflight — FAIL FAST if we can't talk to AWS
+# 3.) STS preflight — FAIL FAST if we can't talk to AWS
 # ------------------------------------------------------
 info "Checking AWS STS connectivity..."
 if ! AWS_STS_JSON=$(aws sts get-caller-identity --output json --region "$AWS_REGION" 2>/dev/null); then
@@ -61,7 +61,7 @@ info "Region: $AWS_REGION"
 info "Cluster: $CLUSTER_NAME"
 
 # -------------------------------
-# 3. Ensure EKS cluster exists
+# 4.) Ensure EKS cluster exists
 # -------------------------------
 if eksctl get cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
   info "EKS cluster '$CLUSTER_NAME' already exists."
@@ -81,14 +81,14 @@ else
 fi
 
 # -------------------------------
-# 4. Update kubeconfig
+# 5.) Update kubeconfig
 # -------------------------------
 info "Updating kubeconfig for cluster '$CLUSTER_NAME'..."
 aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
 kubectl get nodes || warn "Cluster may still be starting, continuing..."
 
 # -------------------------------
-# 5. Associate IAM OIDC provider (fixes vpc-cni warning)
+# 6.) Associate IAM OIDC provider
 # -------------------------------
 info "Ensuring IAM OIDC provider is associated..."
 eksctl utils associate-iam-oidc-provider \
@@ -98,7 +98,7 @@ eksctl utils associate-iam-oidc-provider \
 success "OIDC association step complete (or already present)."
 
 # -------------------------------
-# 6. ECR login
+# 7.) ECR login
 # -------------------------------
 if [[ "$SKIP_BUILD" -ne 1 ]]; then
   info "Logging into ECR at $ECR_BASE ..."
@@ -109,7 +109,7 @@ else
 fi
 
 # -------------------------------
-# 7. Ensure ECR repos
+# 8.) Ensure ECR repos
 # -------------------------------
 ensure_repo() {
   local repo="$1"
@@ -125,9 +125,9 @@ for repo in "${APPS[@]}"; do
 done
 success "ECR repositories ready."
 
-# -------------------------------
-# 8. Build & push images
-# -------------------------------
+# --------------------------------------
+# 9.) Build & push Docker Custom images
+# --------------------------------------
 if [[ "$SKIP_BUILD" -ne 1 ]]; then
   for i in "${!APPS[@]}"; do
     app="${APPS[$i]}"
@@ -150,9 +150,9 @@ else
   info "SKIP_BUILD=1 → assuming images already in ECR."
 fi
 
-# -------------------------------
-# 9. Apply Kubernetes manifests
-# -------------------------------
+# ---------------------------------
+# 10.) Apply Kubernetes manifests
+# ---------------------------------
 info "Applying manifests from '${MANIFEST_DIR}'..."
 for app in "${APPS[@]}"; do
   for kind in deployment service hpa; do
@@ -171,14 +171,14 @@ done
 success "Kubernetes manifests applied."
 
 # -------------------------------
-# 10. Restart deployments
+# 11.) Restart deployments
 # -------------------------------
 for app in "${APPS[@]}"; do
   kubectl rollout restart deploy/"$app" || true
 done
 
 # -------------------------------
-# 11. Print LoadBalancer URLs
+# 12. Print LoadBalancer URLs
 # -------------------------------
 info "Waiting for external LoadBalancer addresses..."
 printf "%-8s %-25s %-8s %s\n" "APP" "SERVICE" "PORT" "URL"

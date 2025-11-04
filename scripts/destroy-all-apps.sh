@@ -3,7 +3,7 @@
 # destroy-all-apps.sh — Tear down Death Row EKS demo
 #
 # This script will:
-#   1. Delete all K8s resources for app1/app2/app3
+#   1. Delete all K8s resources for app1, app2, app3
 #   2. Optionally delete ECR repos (app1, app2, app3)
 #   3. Optionally delete the EKS cluster (via eksctl)
 #
@@ -13,17 +13,17 @@
 set -euo pipefail
 
 # -------------------------------
-# Configuration (edit these)
+# 1.) Configuration (edit these)
 # -------------------------------
 MANIFEST_DIR="manifests"
-NAMESPACE="${NAMESPACE:-default}"
-AWS_REGION="${AWS_REGION:-us-east-1}"
-CLUSTER_NAME="${CLUSTER_NAME:-task-2}"
+NAMESPACE="${NAMESPACE:-default}"         # Replace with namespace
+AWS_REGION="${AWS_REGION:-us-east-1}"     # Update Region Here
+CLUSTER_NAME="${CLUSTER_NAME:-task-2}"    # Update Cluster Name
 
-# Repos we created in deploy script
+# ECR Repos created on deployment script
 ECR_REPOS=("app1" "app2" "app3")
 
-# K8s YAMLs we want to delete
+# K8s YAMLs that will be deleted
 YAML_FILES=(
   "$MANIFEST_DIR/app1-deployment.yaml"
   "$MANIFEST_DIR/app1-service.yaml"
@@ -37,7 +37,7 @@ YAML_FILES=(
 )
 
 # -------------------------------
-# Helpers
+# 1.a) Helpers
 # -------------------------------
 info()    { echo -e "\033[1;36m[INFO]\033[0m $*"; }
 success() { echo -e "\033[1;32m[SUCCESS]\033[0m $*"; }
@@ -45,7 +45,7 @@ warn()    { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 error()   { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }
 
 # -------------------------------
-# Step 0: Tool checks
+# 2.) Tool checks
 # -------------------------------
 command -v kubectl >/dev/null 2>&1 || error "kubectl is required but not installed."
 command -v aws     >/dev/null 2>&1 && AWS_AVAILABLE=true  || AWS_AVAILABLE=false
@@ -70,7 +70,7 @@ read -p "Type 'DESTROY' to delete K8s + ECR resources: " CONFIRM
 [[ "$CONFIRM" == "DESTROY" ]] || error "Aborted. Confirmation not received."
 
 # -------------------------------
-# Step 1: Delete Kubernetes resources
+# 3.) Delete Kubernetes resources
 # -------------------------------
 info "Deleting Kubernetes resources in namespace '$NAMESPACE'..."
 
@@ -84,7 +84,7 @@ for file in "${YAML_FILES[@]}"; do
   fi
 done
 
-# Wait for pods to terminate (don’t fail if they’re already gone)
+# Wait for pods to terminate (doesn’t fail if they’re deleted)
 info "Waiting for pods to terminate..."
 kubectl wait --for=delete pod -l 'app in (app1,app2,app3)' \
   --namespace="$NAMESPACE" --timeout=120s 2>/dev/null || true
@@ -98,7 +98,7 @@ else
 fi
 
 # ---------------------
-# Step 2: ECR cleanup
+# 4.) ECR cleanup
 # ---------------------
 if [[ "$AWS_AVAILABLE" == true ]]; then
   info "Cleaning up ECR repositories in $AWS_REGION ..."
@@ -117,7 +117,7 @@ else
 fi
 
 # -------------------------------------------------
-# Step 3: Ask if we should delete the EKS cluster
+# 5.) Ask if we should delete the EKS cluster
 # -------------------------------------------------
 echo
 read -p "Do you ALSO want to delete the EKS cluster '$CLUSTER_NAME' (Y/N)? " DEL_CLUSTER
@@ -146,9 +146,9 @@ else
   info "Cluster deletion skipped."
 fi
 
-# ------
-# Done
-# ------
+# -------------------------------
+# Tear Down Complete
+# -------------------------------
 echo
 success "DESTROY COMPLETE."
 echo "You can re-deploy with: ./deploy-all-apps.sh"
