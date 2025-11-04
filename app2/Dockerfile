@@ -22,7 +22,7 @@ RUN chown -R appuser:appuser /app
 USER appuser
 
 # Expose port
-EXPOSE 8083
+EXPOSE 8082
 
 # Start Flask
 CMD ["python", "app2.py"]

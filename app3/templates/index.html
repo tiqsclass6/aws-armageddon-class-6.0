@@ -4,6 +4,12 @@
   <meta charset="utf-8">
   <title>Death Row Records – {{ artist.name }}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Expose static background URL to CSS -->
+  <style>
+    :root { --death-row-bg: url('{{ url_for("static", filename="death-row-bg.jpg") }}'); }
+  </style>
+
   <!-- static css -->
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
