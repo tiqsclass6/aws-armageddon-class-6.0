@@ -152,218 +152,179 @@ TASK-2/
 ```bash
 #!/usr/bin/env bash
 # =============================================================================
-# deploy-all-apps.sh — Build, Push, Deploy Death Row EKS Demo
-# Now with:
-#   - STS preflight check (fails fast if no AWS network/creds)
-#   - OIDC association for addons
+# deploy-all-apps.sh — Task-2 EKS Deployment Script
+# -----------------------------------------------------------------------------
+# Builds Docker images, pushes them to ECR, creates/updates an EKS cluster,
+# sets up OIDC and IRSA (for IAM Roles for Service Accounts),
+# applies Kubernetes manifests, and prints full app URLs.
 # =============================================================================
 
 set -euo pipefail
 
 # -------------------------------
-# 1.) Configuration Section
+# 1.) Configuration
 # -------------------------------
-AWS_REGION="${AWS_REGION:-us-east-1}"        # Update Region Here
-CLUSTER_NAME="${CLUSTER_NAME:-task-2}"       # Update Cluster Name
-MANIFEST_DIR="${MANIFEST_DIR:-manifests}"
-NAMESPACE="${NAMESPACE:-default}"
-K8S_VALIDATE="${K8S_VALIDATE:-true}"
-SKIP_BUILD="${SKIP_BUILD:-0}"
+AWS_REGION="us-east-1"
+CLUSTER_NAME="task-2"
+NODEGROUP_NAME="task-2-ng"
+CLUSTER_VERSION="1.33"
+NAMESPACE="task2-ns"
 
+SERVICE_ACCOUNT_NAME="task2-sa"
+IRSA_ROLE_NAME="task2-irsa-s3-role"
+IRSA_POLICY_ARN="arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+
+MANIFEST_DIR="manifests"
 APPS=("app1" "app2" "app3")
-PORTS=(8081 8082 8083)
 
 # -------------------------------
-# 1.a) Helpers
+# 2.) Helper functions
 # -------------------------------
 info()    { echo -e "\033[1;36m[INFO]\033[0m $*"; }
 success() { echo -e "\033[1;32m[SUCCESS]\033[0m $*"; }
-warn()    { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 error()   { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }
 
 # -------------------------------
-# 2.) Tool checks
+# 3.) AWS STS connectivity check
 # -------------------------------
-command -v aws     >/dev/null 2>&1 || error "AWS CLI not found."
-command -v docker  >/dev/null 2>&1 || error "Docker not found."
-command -v kubectl >/dev/null 2>&1 || error "kubectl not found."
-command -v eksctl  >/dev/null 2>&1 || error "eksctl not found."
-
-# ------------------------------------------------------
-# 3.) STS preflight — FAIL FAST if we can't talk to AWS
-# ------------------------------------------------------
 info "Checking AWS STS connectivity..."
-if ! AWS_STS_JSON=$(aws sts get-caller-identity --output json --region "$AWS_REGION" 2>/dev/null); then
-  error "Cannot reach AWS STS in region '$AWS_REGION'.
-Make sure:
-  - You have valid AWS credentials (env vars, profile, or IAM role)
-  - This machine has network access to https://sts.$AWS_REGION.amazonaws.com
-  - If you're in a private subnet, add NAT or run this script from a host with internet.
-Aborting deploy."
-fi
+aws sts get-caller-identity --region "$AWS_REGION" >/dev/null \
+  || error "AWS STS unreachable — check credentials or network."
 
-AWS_ACCOUNT_ID=$(echo "$AWS_STS_JSON" | jq -r '.Account' 2>/dev/null || true)
-if [[ -z "${AWS_ACCOUNT_ID:-}" || "$AWS_ACCOUNT_ID" == "null" ]]; then
-  error "STS returned no account ID — cannot continue."
-fi
-
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 ECR_BASE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-info "Using AWS Account: $AWS_ACCOUNT_ID"
-info "Region: $AWS_REGION"
-info "Cluster: $CLUSTER_NAME"
+info "Authenticated with AWS Account: $AWS_ACCOUNT_ID"
 
 # -------------------------------
-# 4.) Ensure EKS cluster exists
+# 4.) Create or verify EKS cluster
 # -------------------------------
 if eksctl get cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
   info "EKS cluster '$CLUSTER_NAME' already exists."
 else
-  warn "EKS cluster '$CLUSTER_NAME' not found — creating it now..."
+  info "Creating new EKS cluster '$CLUSTER_NAME' (version $CLUSTER_VERSION)..."
   eksctl create cluster \
     --name "$CLUSTER_NAME" \
     --region "$AWS_REGION" \
-    --version 1.30 \
-    --nodegroup-name worker-nodes \
+    --version "$CLUSTER_VERSION" \
+    --nodegroup-name "$NODEGROUP_NAME" \
     --node-type t3.medium \
     --nodes 3 \
     --nodes-min 3 \
     --nodes-max 6 \
     --managed
-  success "EKS cluster '$CLUSTER_NAME' created."
+  success "Cluster '$CLUSTER_NAME' created successfully."
 fi
 
 # -------------------------------
-# 5.) Update kubeconfig
+# 5.) Configure kubectl
 # -------------------------------
-info "Updating kubeconfig for cluster '$CLUSTER_NAME'..."
-aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
-kubectl get nodes || warn "Cluster may still be starting, continuing..."
+info "Updating kubeconfig for kubectl access..."
+aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
 
 # -------------------------------
-# 6.) Associate IAM OIDC provider
+# 6.) Enable IAM OIDC provider
 # -------------------------------
-info "Ensuring IAM OIDC provider is associated..."
+info "Associating IAM OIDC provider with cluster..."
 eksctl utils associate-iam-oidc-provider \
+  --region "$AWS_REGION" \
+  --cluster "$CLUSTER_NAME" \
+  --approve || true
+success "OIDC provider configured."
+
+# -------------------------------
+# 7.) Create IRSA (IAM Role + SA)
+# -------------------------------
+info "Creating IRSA role '$IRSA_ROLE_NAME' and service account '$SERVICE_ACCOUNT_NAME'..."
+eksctl create iamserviceaccount \
+  --name "$SERVICE_ACCOUNT_NAME" \
+  --namespace "$NAMESPACE" \
   --cluster "$CLUSTER_NAME" \
   --region "$AWS_REGION" \
+  --role-name "$IRSA_ROLE_NAME" \
+  --attach-policy-arn "$IRSA_POLICY_ARN" \
   --approve || true
-success "OIDC association step complete (or already present)."
+success "IRSA role and service account created."
 
 # -------------------------------
-# 7.) ECR login
+# 8.) Log into ECR
 # -------------------------------
-if [[ "$SKIP_BUILD" -ne 1 ]]; then
-  info "Logging into ECR at $ECR_BASE ..."
-  aws ecr get-login-password --region "$AWS_REGION" \
-    | docker login --username AWS --password-stdin "$ECR_BASE"
-else
-  info "SKIP_BUILD=1 → skipping ECR login and image builds."
-fi
+info "Logging into ECR..."
+aws ecr get-login-password --region "$AWS_REGION" \
+  | docker login --username AWS --password-stdin "$ECR_BASE"
 
 # -------------------------------
-# 8.) Ensure ECR repos
+# 9.) Ensure ECR repos exist
 # -------------------------------
-ensure_repo() {
-  local repo="$1"
-  if ! aws ecr describe-repositories --repository-names "$repo" --region "$AWS_REGION" >/dev/null 2>&1; then
-    info "Creating ECR repo: $repo"
-    aws ecr create-repository --repository-name "$repo" --region "$AWS_REGION" >/dev/null
+for app in "${APPS[@]}"; do
+  if ! aws ecr describe-repositories --repository-names "$app" --region "$AWS_REGION" >/dev/null 2>&1; then
+    info "Creating ECR repo for $app..."
+    aws ecr create-repository --repository-name "$app" --region "$AWS_REGION" >/dev/null
   else
-    info "ECR repo '$repo' exists"
+    info "ECR repo '$app' already exists."
   fi
-}
-for repo in "${APPS[@]}"; do
-  ensure_repo "$repo"
 done
-success "ECR repositories ready."
+success "ECR repositories verified."
 
-# --------------------------------------
-# 9.) Build & push Docker Custom images
-# --------------------------------------
-if [[ "$SKIP_BUILD" -ne 1 ]]; then
-  for i in "${!APPS[@]}"; do
-    app="${APPS[$i]}"
-    image="${ECR_BASE}/${app}:latest"
+# -------------------------------
+# 10.) Build and push app images
+# -------------------------------
+for app in "${APPS[@]}"; do
+  IMAGE="${ECR_BASE}/${app}:latest"
 
-    info "Building image for ${app}..."
-    (
-      cd "$app"
-      docker build -t "$app:latest" .
-    )
+  info "Building Docker image for $app..."
+  (cd "$app" && docker build -t "$app:latest" .)
 
-    info "Tagging ${app} → ${image}"
-    docker tag "$app:latest" "$image"
+  info "Tagging image $app → $IMAGE"
+  docker tag "$app:latest" "$IMAGE"
 
-    info "Pushing ${app} → ${image}"
-    docker push "$image"
-  done
-  success "All images built and pushed."
-else
-  info "SKIP_BUILD=1 → assuming images already in ECR."
-fi
+  info "Pushing $app image to ECR..."
+  docker push "$IMAGE"
+done
+success "All app images built and pushed to ECR."
 
-# ---------------------------------
-# 10.) Apply Kubernetes manifests
-# ---------------------------------
-info "Applying manifests from '${MANIFEST_DIR}'..."
+# -------------------------------
+# 11.) Apply Kubernetes manifests
+# -------------------------------
+info "Deploying manifests to namespace '$NAMESPACE'..."
+kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
 for app in "${APPS[@]}"; do
   for kind in deployment service hpa; do
     file="${MANIFEST_DIR}/${app}-${kind}.yaml"
     [[ -f "$file" ]] || continue
-
-    if [[ "$K8S_VALIDATE" == "false" ]]; then
-      info "kubectl apply --validate=false -f $file"
-      kubectl apply --validate=false -f "$file" || warn "Failed to apply $file"
-    else
-      info "kubectl apply -f $file"
-      kubectl apply -f "$file" || warn "Failed to apply $file (try K8S_VALIDATE=false)"
-    fi
+    info "Applying $file..."
+    kubectl apply -f "$file" --namespace "$NAMESPACE"
   done
 done
-success "Kubernetes manifests applied."
+success "All manifests applied successfully."
 
 # -------------------------------
-# 11.) Restart deployments
+# 12.) Print full application URLs
 # -------------------------------
-for app in "${APPS[@]}"; do
-  kubectl rollout restart deploy/"$app" || true
-done
-
-# -------------------------------
-# 12. Print LoadBalancer URLs
-# -------------------------------
-info "Waiting for external LoadBalancer addresses..."
-printf "%-8s %-25s %-8s %s\n" "APP" "SERVICE" "PORT" "URL"
-printf "%-8s %-25s %-8s %s\n" "--------" "------------------------" "--------" "-------------------------"
+info "Retrieving external LoadBalancer URLs..."
+printf "\n%-8s %-30s %-8s %-50s\n" "APP" "SERVICE" "PORT" "FULL URL"
+printf "%-8s %-30s %-8s %-50s\n" "--------" "------------------------------" "--------" "--------------------------------------------------"
 
 for app in "${APPS[@]}"; do
   svc="${app}-service"
-  external=""
-  port=$(kubectl get svc "$svc" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "")
+  port=$(kubectl get svc "$svc" -n "$NAMESPACE" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "80")
+  host=$(kubectl get svc "$svc" -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+  [[ -z "$host" ]] && host=$(kubectl get svc "$svc" -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
 
-  for _ in {1..60}; do
-    external=$(kubectl get svc "$svc" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-    [[ -z "$external" ]] && external=$(kubectl get svc "$svc" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
-    [[ -n "$external" && "$external" != "<pending>" ]] && break
-    sleep 5
-  done
-
-  if [[ -z "$external" || "$external" == "<pending>" ]]; then
-    printf "%-8s %-25s %-8s %s\n" "$app" "$svc" "${port:-?}" "PENDING"
-    continue
-  fi
-
-  if [[ "$port" == "80" || "$port" == "443" || -z "$port" ]]; then
-    url="http://${external}"
+  if [[ -z "$host" || "$host" == "<pending>" ]]; then
+    printf "%-8s %-30s %-8s %-50s\n" "$app" "$svc" "$port" "LoadBalancer pending..."
   else
-    url="http://${external}:${port}"
+    url="http://${host}:${port}"
+    printf "%-8s %-30s %-8s %-50s\n" "$app" "$svc" "$port" "$url"
   fi
-
-  printf "%-8s %-25s %-8s %s\n" "$app" "$svc" "${port:-?}" "$url"
 done
 
-success "Deployment is complete .."
-echo "To tear down everything, run: ./destroy-all-apps.sh"
+# -------------------------------
+# 13.) Completion message
+# -------------------------------
+success "Deployment complete!"
+echo "Access your apps at the URLs above."
+echo "To clean up, run: ./destroy-all-apps.sh"
 ```
 
 ---
@@ -461,167 +422,148 @@ kubectl get pods -l app=app1 -w
 ```bash
 #!/usr/bin/env bash
 # =============================================================================
-# destroy-all-apps.sh — Tear down Death Row EKS demo
-#
-# This script will:
-#   1. Delete all K8s resources for app1, app2, app3
-#   2. Optionally delete ECR repos (app1, app2, app3)
-#   3. Optionally delete the EKS cluster (via eksctl)
-#
-# DANGER: Deleting the cluster will remove the control plane + nodegroup
+# destroy-all-apps.sh — Task-2 EKS Cleanup Script
+# -----------------------------------------------------------------------------
+# Deletes Kubernetes app resources, IRSA (IAM Role + ServiceAccount), ECR repos,
+# and optionally the EKS cluster. Commands are described inline for clarity.
 # =============================================================================
 
 set -euo pipefail
 
 # -------------------------------
-# 1.) Configuration (edit these)
+# 1.) Configuration
 # -------------------------------
-MANIFEST_DIR="manifests"
-NAMESPACE="${NAMESPACE:-default}"         # Replace with namespace
-AWS_REGION="${AWS_REGION:-us-east-1}"     # Update Region Here
-CLUSTER_NAME="${CLUSTER_NAME:-task-2}"    # Update Cluster Name
+AWS_REGION="us-east-1"                 # Your AWS region
+CLUSTER_NAME="task-2"                  # EKS cluster name
+NAMESPACE="task2-ns"                   # Namespace where apps live
+SERVICE_ACCOUNT_NAME="task2-sa"        # IRSA-linked service account name
+IRSA_ROLE_NAME="task2-irsa-s3-role"    # IRSA role created by deploy script
 
-# ECR Repos created on deployment script
+# Manifests directory and app names (must match deploy-all-apps.sh)
+MANIFEST_DIR="manifests"
+APPS=("app1" "app2" "app3")
+
+# ECR repos to delete (must match deploy-all-apps.sh)
 ECR_REPOS=("app1" "app2" "app3")
 
-# K8s YAMLs that will be deleted
-YAML_FILES=(
-  "$MANIFEST_DIR/app1-deployment.yaml"
-  "$MANIFEST_DIR/app1-service.yaml"
-  "$MANIFEST_DIR/app1-hpa.yaml"
-  "$MANIFEST_DIR/app2-deployment.yaml"
-  "$MANIFEST_DIR/app2-service.yaml"
-  "$MANIFEST_DIR/app2-hpa.yaml"
-  "$MANIFEST_DIR/app3-deployment.yaml"
-  "$MANIFEST_DIR/app3-service.yaml"
-  "$MANIFEST_DIR/app3-hpa.yaml"
-)
-
 # -------------------------------
-# 1.a) Helpers
+# 2.) Helper functions
 # -------------------------------
 info()    { echo -e "\033[1;36m[INFO]\033[0m $*"; }
 success() { echo -e "\033[1;32m[SUCCESS]\033[0m $*"; }
 warn()    { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 error()   { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; exit 1; }
 
-# -------------------------------
-# 2.) Tool checks
-# -------------------------------
-command -v kubectl >/dev/null 2>&1 || error "kubectl is required but not installed."
-command -v aws     >/dev/null 2>&1 && AWS_AVAILABLE=true  || AWS_AVAILABLE=false
-command -v eksctl  >/dev/null 2>&1 && EKSCTL_AVAILABLE=true || EKSCTL_AVAILABLE=false
+need() { command -v "$1" >/dev/null 2>&1 || error "Required tool '$1' not found."; }
 
-AWS_ACCOUNT_ID="UNKNOWN"
-if [[ "$AWS_AVAILABLE" == true ]]; then
-  AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "UNKNOWN")
-fi
+# -------------------------------
+# 3.) Tool checks
+# -------------------------------
+need kubectl
+need eksctl
+need aws
 
+# -------------------------------
+# 4.) Safety confirmation
+# -------------------------------
 echo
-echo "======================================================================"
-echo "  WARNING: THIS WILL DELETE ALL DEATH ROW RECORDS KUBERNETES RESOURCES"
-echo "----------------------------------------------------------------------"
-echo "  Namespace: $NAMESPACE"
-echo "  Manifests: $MANIFEST_DIR"
-echo "  ECR repos: ${ECR_REPOS[*]}"
-echo "  EKS cluster (optional): $CLUSTER_NAME in $AWS_REGION"
-echo "================================================================"
+echo "This will remove:"
+echo "  • K8s resources in namespace: $NAMESPACE"
+echo "  • IRSA: ServiceAccount '$SERVICE_ACCOUNT_NAME' and IAM Role '$IRSA_ROLE_NAME'"
+echo "  • ECR repositories: ${ECR_REPOS[*]}"
+echo "  • (Optional) EKS cluster: $CLUSTER_NAME in $AWS_REGION"
 echo
-read -p "Type 'DESTROY' to delete K8s + ECR resources: " CONFIRM
-[[ "$CONFIRM" == "DESTROY" ]] || error "Aborted. Confirmation not received."
+read -p "Type 'DESTROY' to proceed: " CONFIRM
+[[ "$CONFIRM" == "DESTROY" ]] || error "Aborted."
 
 # -------------------------------
-# 3.) Delete Kubernetes resources
+# 5.) Ensure kubeconfig and context
 # -------------------------------
-info "Deleting Kubernetes resources in namespace '$NAMESPACE'..."
+info "Setting kubectl context to the EKS cluster (so deletes work against the right cluster)..."
+aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
 
-for file in "${YAML_FILES[@]}"; do
-  if [[ -f "$file" ]]; then
-    info "kubectl delete -f $file --ignore-not-found=true --namespace=$NAMESPACE"
-    kubectl delete -f "$file" --ignore-not-found=true --namespace="$NAMESPACE" || \
-      warn "Failed to delete $file (may already be gone)"
-  else
-    warn "File not found: $file"
-  fi
+# -------------------------------
+# 6.) Delete Kubernetes resources
+# -------------------------------
+info "Deleting Kubernetes resources applied by manifests (deployments/services/HPAs)..."
+for app in "${APPS[@]}"; do
+  for kind in deployment service hpa; do
+    file="${MANIFEST_DIR}/${app}-${kind}.yaml"
+    [[ -f "$file" ]] || continue
+    info "kubectl delete -f $file --namespace $NAMESPACE --ignore-not-found=true"
+    kubectl delete -f "$file" --namespace "$NAMESPACE" --ignore-not-found=true || warn "Delete may have already occurred for $file"
+  done
 done
 
-# Wait for pods to terminate (doesn’t fail if they’re deleted)
-info "Waiting for pods to terminate..."
-kubectl wait --for=delete pod -l 'app in (app1,app2,app3)' \
-  --namespace="$NAMESPACE" --timeout=120s 2>/dev/null || true
+info "Optionally deleting the entire namespace to remove any leftover resources..."
+kubectl delete namespace "$NAMESPACE" --ignore-not-found=true || true
 
-# Final K8s check
-if kubectl get deploy,svc,hpa -l 'app in (app1,app2,app3)' --namespace="$NAMESPACE" &>/dev/null; then
-  warn "Some app resources may still exist. Check with:"
-  warn "  kubectl get all -l 'app in (app1,app2,app3)' -n $NAMESPACE"
-else
-  success "All Death Row app Kubernetes resources removed."
-fi
+# Wait briefly for pods/ELBs to drain (best effort)
+info "Waiting up to 120s for pods and services to terminate (best-effort)..."
+kubectl wait --for=delete pod -l "app in (app1,app2,app3)" -n "$NAMESPACE" --timeout=120s 2>/dev/null || true
 
-# ---------------------
-# 4.) ECR cleanup
-# ---------------------
-if [[ "$AWS_AVAILABLE" == true ]]; then
-  info "Cleaning up ECR repositories in $AWS_REGION ..."
-  for repo in "${ECR_REPOS[@]}"; do
-    if aws ecr describe-repositories --repository-names "$repo" --region "$AWS_REGION" &>/dev/null; then
-      info "Deleting ECR repo: $repo"
-      aws ecr delete-repository --repository-name "$repo" --force --region "$AWS_REGION" || \
-        warn "Failed to delete ECR repo: $repo"
-    else
-      warn "ECR repo not found: $repo"
-    fi
-  done
-  success "ECR cleanup complete."
-else
-  warn "AWS CLI not available — skipping ECR cleanup."
-fi
+# ----------------------------------------------
+# 7.) IRSA cleanup (ServiceAccount + IAM Role)
+# ----------------------------------------------
+info "Removing IRSA binding (eksctl manages both the K8s SA and IAM role binding)..."
+info "eksctl delete iamserviceaccount --name $SERVICE_ACCOUNT_NAME --namespace $NAMESPACE --cluster $CLUSTER_NAME --region $AWS_REGION"
+eksctl delete iamserviceaccount \
+  --name "$SERVICE_ACCOUNT_NAME" \
+  --namespace "$NAMESPACE" \
+  --cluster "$CLUSTER_NAME" \
+  --region "$AWS_REGION" \
+  --wait || warn "IRSA iamserviceaccount deletion encountered an issue (may already be removed)."
 
-# -------------------------------------------------
-# 5.) Ask if we should delete the EKS cluster
-# -------------------------------------------------
-echo
-read -p "Do you ALSO want to delete the EKS cluster '$CLUSTER_NAME' (Y/N)? " DEL_CLUSTER
-DEL_CLUSTER=${DEL_CLUSTER:-N}
+# Note: The above removes the IAM role created by eksctl for this SA.
+# If you created additional custom IAM policies/roles, delete or detach them here.
 
-if [[ "$DEL_CLUSTER" =~ ^[Yy]$ ]]; then
-  if [[ "$EKSCTL_AVAILABLE" != true ]]; then
-    error "eksctl is not installed, cannot delete cluster. Install from https://eksctl.io/"
-  fi
+# -------------------------------
+# 8.) ECR repositories cleanup
+# -------------------------------
+info "Deleting ECR repositories (forces deletion of all images too)..."
+for repo in "${ECR_REPOS[@]}"; do
+  info "aws ecr delete-repository --repository-name $repo --force --region $AWS_REGION"
+  aws ecr delete-repository \
+    --repository-name "$repo" \
+    --force \
+    --region "$AWS_REGION" \
+    >/dev/null 2>&1 || warn "Repo '$repo' may already be gone or in use."
+done
+success "ECR cleanup complete."
 
+# ---------------------------------------
+# 9.) Optionally delete the EKS cluster
+# ---------------------------------------
+read -p "Also delete the EKS cluster '$CLUSTER_NAME'? (y/N): " DEL_CLUSTER
+if [[ "${DEL_CLUSTER:-N}" =~ ^[Yy]$ ]]; then
   echo
-  echo "========================================================================"
-  echo "  FINAL WARNING: This will delete the EKS cluster '$CLUSTER_NAME'"
-  echo "  and its nodegroup(s). This action CANNOT be undone."
-  echo "========================================================================"
+  echo "FINAL WARNING: Deleting the EKS cluster will also remove its nodegroups and control plane."
   read -p "Type the cluster name '$CLUSTER_NAME' to confirm: " CL_CONFIRM
   [[ "$CL_CONFIRM" == "$CLUSTER_NAME" ]] || error "Cluster deletion aborted — name mismatch."
 
-  info "Deleting EKS cluster '$CLUSTER_NAME' in region '$AWS_REGION'..."
+  info "Deleting EKS cluster (this may take 10–20 minutes)..."
+  info "eksctl delete cluster --name $CLUSTER_NAME --region $AWS_REGION --wait"
   eksctl delete cluster \
     --name "$CLUSTER_NAME" \
     --region "$AWS_REGION" \
     --wait
-  success "EKS cluster '$CLUSTER_NAME' deleted."
+
+  # Optional: best-effort OIDC disassociation if any OIDC provider lingers
+  info "Attempting best-effort OIDC disassociation (safe to ignore if already gone)..."
+  eksctl utils disassociate-iam-oidc-provider \
+    --cluster "$CLUSTER_NAME" \
+    --region "$AWS_REGION" || true
+
+  success "Cluster '$CLUSTER_NAME' deleted."
 else
   info "Cluster deletion skipped."
 fi
 
 # -------------------------------
-# 6.) Tear Down Complete
+# 10.) Completion
 # -------------------------------
-echo
-success "DESTROY COMPLETE."
-echo "You can re-deploy with: ./deploy-all-apps.sh"
-```
-
----
-
-## 🧹 Cleanup
-
-```bash
-chmod +x scripts/destroy-all-apps.sh
-./scripts/destroy-all-apps.sh
+success "Destroy completed. Environment is cleaned."
+echo "You can redeploy with: ./deploy-all-apps.sh"
 ```
 
 ![cleanup-app-pt1](/Screenshots/cleanup-app-pt1.jpg)
