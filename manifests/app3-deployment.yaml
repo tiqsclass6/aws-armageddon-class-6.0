@@ -5,8 +5,16 @@ metadata:
   namespace: task2-ns
   labels:
     app: app3
+    app.kubernetes.io/name: app3
+    app.kubernetes.io/part-of: task2-flask-suite
 spec:
   replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: app3
@@ -14,24 +22,56 @@ spec:
     metadata:
       labels:
         app: app3
+        app.kubernetes.io/name: app3
+        app.kubernetes.io/part-of: task2-flask-suite
     spec:
-      serviceAccountName: task2-sa
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: app3
+
       containers:
         - name: app3
-          image: <AWS_ACCOUNT_ID>.dkr.ecr.<region>.amazonaws.com/app3:latest
+          image: 866340886126.dkr.ecr.us-east-1.amazonaws.com/app3:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8083
+              name: http
+          env:
+            - name: PORT
+              value: "8083"
+            - name: HEALTH_PATH
+              value: "/health"
           resources:
             requests:
               cpu: 100m
               memory: 128Mi
             limits:
-              cpu: 300m
+              cpu: 500m
               memory: 256Mi
+          # In app3-deployment.yaml (container spec section)
           readinessProbe:
             httpGet:
-              path: /
+              path: /app3          # ← matches the actual route
               port: 8083
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /app3          # ← same route for simplicity
+              port: 8083
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
