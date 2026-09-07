@@ -50,6 +50,8 @@ task1/
 
 ## Deploy
 
+Full command-by-command steps, expected output, screenshots, and teardown are in **[docs/RUNBOOK.md](docs/RUNBOOK.md)**. Short path:
+
 ### 1. EKS platform
 
 ```bash
