@@ -25,8 +25,8 @@ Grafana is now ClusterIP and published through Envoy (`HTTPRoute` path `/grafana
 
 | File | Purpose |
 | --- | --- |
-| `scripts/values/kube-prometheus-stack.yaml` | ClusterIP services, probes, resources, encrypted gp3 PVCs, Grafana HA without RWO persistence |
-| `scripts/values/envoy-gateway.yaml` | Two Envoy control-plane replicas and resource limits |
+| `values/kube-prometheus-stack.yaml` | ClusterIP services, probes, resources, encrypted gp3 PVCs, Grafana HA without RWO persistence |
+| `values/envoy-gateway.yaml` | Two Envoy control-plane replicas and resource limits |
 
 Grafana persistence is **off** on purpose. EBS `gp3` is ReadWriteOnce, so two Grafana replicas cannot share one volume. Dashboards still load from Prometheus Operator ConfigMaps.
 

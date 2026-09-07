@@ -53,9 +53,9 @@ wait_for_namespace_deletion() {
 section "Uninstall Envoy + Prometheus + Grafana"
 
 subsection "Application routes and demo Gateway"
-kubectl delete -f "${ROOT}/scripts/manifests/grafana-route.yaml" --ignore-not-found=true
-kubectl delete -f "${ROOT}/scripts/manifests/servicemonitor-envoy.yaml" --ignore-not-found=true
-kubectl delete -f "${ROOT}/scripts/manifests/poddisruptionbudgets.yaml" --ignore-not-found=true
+kubectl delete -f "${ROOT}/manifests/grafana-route.yaml" --ignore-not-found=true
+kubectl delete -f "${ROOT}/manifests/servicemonitor-envoy.yaml" --ignore-not-found=true
+kubectl delete -f "${ROOT}/manifests/poddisruptionbudgets.yaml" --ignore-not-found=true
 kubectl delete -f "https://github.com/envoyproxy/gateway/releases/download/${ENVOY_VERSION}/quickstart.yaml" \
   --namespace default --ignore-not-found=true
 success "Gateway demo resources deleted (or were absent)."

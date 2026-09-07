@@ -3,8 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VALUES="${ROOT}/scripts/values"
-MANIFESTS="${ROOT}/scripts/manifests"
+VALUES="${ROOT}/values"
+MANIFESTS="${ROOT}/manifests"
 ENVOY_VERSION="${ENVOY_VERSION:-v1.5.3}"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then

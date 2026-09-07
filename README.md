@@ -17,23 +17,24 @@ Automate Envoy Gateway plus the Prometheus and Grafana stack on Amazon EKS so th
 | Grafana | Same chart; UI is reached through Envoy, not a public LoadBalancer |
 | Automated install | `scripts/install-monitoring.sh` |
 | Screenshots of all three running | `images/` |
-| Instructions in README | This file, plus `docs/DEPLOY.md` |
+| Instructions in README | This file, plus `docs/RUNBOOK.md` |
 
 ---
 
 ## Layout
 
 ```plaintext
-.
+task1/
 ├── README.md
-├── docs/DEPLOY.md
-├── images/                 # screenshots and diagram
+├── .gitignore
+├── docs/RUNBOOK.md
+├── images/
+├── manifests/              # Grafana HTTPRoute, ServiceMonitor, PDBs
 ├── scripts/
 │   ├── install-monitoring.sh
-│   ├── uninstall-monitoring.sh
-│   ├── values/             # Helm hardening
-│   └── manifests/          # ServiceMonitor, Grafana HTTPRoute, PDBs
-└── terraform/              # VPC, EKS, IRSA, EBS CSI, gp3
+│   └── uninstall-monitoring.sh
+├── terraform/              # numbered VPC → EKS → IRSA → EBS CSI
+└── values/                 # Helm values for Envoy and kube-prometheus-stack
 ```
 
 ---
@@ -83,7 +84,7 @@ chmod +x scripts/install-monitoring.sh
 
 The script:
 
-1. Installs kube-prometheus-stack from `scripts/values/kube-prometheus-stack.yaml`
+1. Installs kube-prometheus-stack from `values/kube-prometheus-stack.yaml`
 2. Installs Envoy Gateway (`v1.5.3`) with two replicas
 3. Applies the Envoy quickstart Gateway
 4. Routes Grafana at `/grafana` on that Gateway
@@ -169,7 +170,7 @@ cd terraform && terraform destroy
 | Grafana 404 at `/grafana` | Route or subpath | Confirm HTTPRoute and `grafana.ini` `serve_from_sub_path` |
 | Password empty | Secret not ready | Wait for Grafana pods Ready, then re-run the secret command |
 | Helm release exists | Partial install | `./scripts/uninstall-monitoring.sh` then install again |
-| Namespace stuck Terminating | CRD finalizers | See `docs/DEPLOY.md` |
+| Namespace stuck Terminating | CRD finalizers | See `docs/RUNBOOK.md` |
 
 ---
 
