@@ -1,277 +1,185 @@
-# 🌐 ARMAGEDDON Task 1 — Automated Kubernetes Observability Stack
+# Armageddon Task 1 — Envoy, Prometheus, and Grafana on EKS
 
-![Status](https://img.shields.io/badge/status-active-success.svg)
-![Platform](https://img.shields.io/badge/platform-AWS%20EKS-blue.svg)
-![Automation](https://img.shields.io/badge/automation-Helm%20%2B%20Terraform-orange.svg)
-![Monitoring Stack](https://img.shields.io/badge/stack-Envoy%20%7C%20Prometheus%20%7C%20Grafana-9cf.svg)
-![Task](https://img.shields.io/badge/task-Network%20Automation%20Challenge-green.svg)
-![Scripts](https://img.shields.io/badge/scripts-Automated%20Install%20%26%20Uninstall-lightblue.svg)
-![Screenshots](https://img.shields.io/badge/screenshots-Available-important.svg)
-![Language](https://img.shields.io/badge/language-Bash%20%26%20Terraform-yellow.svg)
-![Last Updated](https://img.shields.io/badge/last%20updated-October%202025-purple.svg)
+Balerica Inc. (HQ: Sao Paulo) — Network team automation lab.
 
-![diagram.png](/Screenshots/diagram.png)
+Automate Envoy Gateway plus the Prometheus and Grafana stack on Amazon EKS so the network team does not install these by hand.
+
+![Architecture](images/diagram.png)
 
 ---
 
-## 📖 Overview
+## Requirements coverage
 
-The **Network Team** aims to automate deployment and management of core observability components in an **Amazon EKS** cluster to reduce operational toil and streamline monitoring.  
-This project automates the installation of:
-
-- **Envoy Gateway** (for ingress and routing)
-- **Prometheus** (for metrics collection)
-- **Grafana** (for visualization)
-
-All deployments are handled using Helm, with verification and cleanup scripts provided for full lifecycle management.
-
----
-
-## 🧠 Task 1 — Network Infrastructure Automation
-
-### Objective
-
-The **Network Team** aims to automate a portion of their Kubernetes-based network infrastructure within an **Amazon EKS** cluster.  
-This task involves deploying and validating a complete observability and gateway stack using **Helm**.
-
-### Requirements
-
-1. Configure and launch the following components in your EKS cluster:
-   - **Envoy Gateway** — for ingress and routing management  
-   - **Prometheus** — for metrics collection and alerting  
-   - **Grafana** — for metrics visualization and dashboarding
-2. Automate the deployment process using scripts or Helm commands to **minimize operational toil**.
-3. Capture **screenshots** of the cluster running all three services to verify successful deployment.
-4. Document the entire setup process and verification steps in the **README.md** file.
-
-### Deliverables
-
-- 📂 **Automated Installation Scripts** (`AA-install-kubernetes-monitoring.sh`)
-- 📂 **Automated Uninstallation Script** (`AB-uninstall-kubernetes-monitoring.sh`)
-- 📸 **Screenshots Folder** (`Screenshots/`) containing installation and validation proof
-- 📜 **Detailed Documentation** (this README) describing deployment, verification, and teardown steps
-
-### Expected Outcome
-
-By the end of this task, the Network team should be able to:
-
-- Deploy **Envoy**, **Prometheus**, and **Grafana** automatically with a single script.  
-- Validate that all observability components are operational within the EKS cluster.  
-- Re-run or uninstall the setup cleanly with minimal manual intervention.  
-- Reference clear documentation and screenshots for review or auditing.
+| Requirement | How it is met |
+| --- | --- |
+| Envoy in the EKS cluster | Helm chart `envoyproxy/gateway-helm` in `envoy-gateway-system` |
+| Prometheus | `kube-prometheus-stack` in `observability` |
+| Grafana | Same chart; UI is reached through Envoy, not a public LoadBalancer |
+| Automated install | `scripts/install-monitoring.sh` |
+| Screenshots of all three running | `images/` |
+| Instructions in README | This file, plus `docs/DEPLOY.md` |
 
 ---
 
-## 🧩 Project Structure
+## Layout
 
 ```plaintext
-ARMAGEDDON 2.0/
-├── Screenshots/                              # Evidence & walkthrough images
-│   ├── demo.jpg
-│   ├── install-pt1.jpg
-│   ├── install-pt2.jpg
-│   ├── install-pt3.jpg
-│   ├── install-pt4.jpg
-│   ├── terraform-apply.jpg
-│   ├── terraform-destroy.jpg
-│   ├── uninstall-pt1.jpg
-│   └── uninstall-pt2.jpg
-├── .gitignore                                # Ignore files
-├── 0-var.tf                                  # Terraform variables
-├── 1-auth.tf                                 # Authentication setup
-├── 2-vpc.tf                                  # VPC creation
-├── 3-subnets.tf                              # Subnet definitions
-├── 4-igw.tf                                  # Internet Gateway setup
-├── 5-nat.tf                                  # NAT Gateway setup
-├── 6-rtb.tf                                  # Route tables
-├── 7-eks.tf                                  # EKS cluster definition
-├── 8-node.tf                                 # Node group definitions
-├── 9-runtime.tf                              # Runtime configs
-├── 10-iam-oidc.tf                            # IAM OIDC provider setup
-├── 11a-storage-iam.tf                        # IAM policies for Prometheus/Grafana
-├── 11b-storage-helm.tf                       # Helm storage configurations
-├── 12-output.tf                              # Terraform outputs
-├── AA-install-kubernetes-monitoring.sh       # Automated install script
-├── AB-uninstall-kubernetes-monitoring.sh     # Automated uninstall script
-├── DEPLOY.md                                 # Extended deployment notes
-└── README.md                                 # Project documentation
-
+.
+├── README.md
+├── docs/DEPLOY.md
+├── images/                 # screenshots and diagram
+├── scripts/
+│   ├── install-monitoring.sh
+│   ├── uninstall-monitoring.sh
+│   ├── values/             # Helm hardening
+│   └── manifests/          # ServiceMonitor, Grafana HTTPRoute, PDBs
+└── terraform/              # VPC, EKS, IRSA, EBS CSI, gp3
 ```
 
 ---
 
-## 🚀 Deployment Instructions
+## Prerequisites
 
-### Prerequisites
-
-- A running **EKS cluster** (Terraform files included for provisioning)
-- **Helm v3+**
-- **kubectl** configured to target your cluster
-- Adequate IAM permissions for Helm and Kubernetes operations
+- Terraform >= 1.10
+- AWS credentials with rights to create VPC, EKS, IAM, KMS, and Load Balancers
+- `kubectl` and Helm 3
+- Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and set `eks_public_access_cidrs` to your public IP `/32`
 
 ---
 
-### Step 1 – Provision Infrastructure
+## Deploy
 
-Use the Terraform files to build the cluster:
+### 1. EKS platform
 
 ```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars   # then edit
 terraform init
 terraform fmt
 terraform validate
 terraform plan
-terraform apply -auto-approve
+terraform apply
 ```
 
-![terraform-apply.jpg](Screenshots/terraform-apply.jpg)
+![terraform-apply.jpg](images/terraform-apply.jpg)
 
-Wait for the EKS cluster and node groups to become active.
+Terraform creates:
 
-`12-output.tf`
+- VPC with public/private subnets in **two AZs** (workers stay private)
+- EKS with secrets encryption, control-plane logs, and a private API endpoint
+- Node group with IMDSv2 required
+- IRSA for VPC CNI and EBS CSI (CNI is **not** attached to the node instance role)
+- Encrypted `gp3` default StorageClass
 
-```plaintext
-ebs_csi_iam_role_arn = "arn:aws:iam::866340886126:role/demo-ebs-csi-iam-role"
-eks_cluster_info = {
-  "arn" = "arn:aws:eks:us-east-1:866340886126:cluster/demo"
-  "description" = "EKS cluster info"
-  "endpoint" = "https://F8531A6EDEA95F447C6027F21DC80FB7.gr7.us-east-1.eks.amazonaws.com"
-  "id" = "demo"
-  "name" = "demo"
-}
-eks_node_group_summary = "Node group 'demo-private-nodes' runs 2 instance(s) of type t3.small"
-openid_connect_provider = {
-  "arn" = "arn:aws:iam::866340886126:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/F8531A6EDEA95F447C6027F21DC80FB7"
-  "url" = "https://oidc.eks.us-east-1.amazonaws.com/id/F8531A6EDEA95F447C6027F21DC80FB7"
-}
-```
-
----
-
-### Step 2 – Deploy Observability Stack
-
-> [WARNING!]
-> You must run Docker Desktop before you deploy the script.
-
-Run the automated installation script:
+### 2. Envoy, Prometheus, Grafana
 
 ```bash
-chmod +x AA-install-kubernetes-monitoring.sh
-./AA-install-kubernetes-monitoring.sh
+chmod +x scripts/install-monitoring.sh
+./scripts/install-monitoring.sh
 ```
 
-This script:
+![install-pt1.jpg](images/install-pt1.jpg)
+![install-pt2.jpg](images/install-pt2.jpg)
 
-1. Adds the Prometheus Helm repository.  
-2. Installs **Prometheus + Grafana** via `kube-prometheus-stack`.  
-3. Installs **Envoy Gateway** (`v1.5.3`) via Helm.  
-4. Applies the Envoy Quickstart configuration.  
-5. Creates a **ServiceMonitor** for Envoy metrics.  
-6. Prints the Grafana admin password and service URLs.
+The script:
 
-![install-pt1.jpg](Screenshots/install-pt1.jpg)
-![install-pt2.jpg](Screenshots/install-pt2.jpg)
+1. Installs kube-prometheus-stack from `scripts/values/kube-prometheus-stack.yaml`
+2. Installs Envoy Gateway (`v1.5.3`) with two replicas
+3. Applies the Envoy quickstart Gateway
+4. Routes Grafana at `/grafana` on that Gateway
+5. Scrapes Envoy metrics into Prometheus via ServiceMonitor
 
----
-
-### Step 3 – Verify the Deployment
-
-After 3–5 minutes, confirm all services are running:
+### 3. Verify
 
 ```bash
 kubectl get pods -n observability
-kubectl get svc -n observability
 kubectl get pods -n envoy-gateway-system
-```
-
-Expected outputs:
-
-- `monitoring-kube-prometheus-prometheus`
-- `monitoring-grafana`
-- `envoy-gateway`
-
----
-
-### Step 4 – Access Grafana & Prometheus
-
-Retrieve the external LoadBalancer URLs:
-
-```bash
 kubectl get svc -n observability
+kubectl get gateway,httproute -A
 ```
 
-![install-pt3.jpg](Screenshots/install-pt3.jpg)
+Expect Ready pods for Prometheus, Grafana, and `envoy-gateway`.
 
-Visit:
+![install-pt3.jpg](images/install-pt3.jpg)
 
-- **Grafana** → `http://&lt;grafana-loadbalancer&gt;:80`
-- **Prometheus** → `http://&lt;prometheus-loadbalancer&gt;:9090`
+### 4. Access
 
-Retrieve Grafana password:
+Grafana is **not** on a public LoadBalancer. Use Envoy:
 
 ```bash
-# Retrieve the Grafana admin password from the Kubernetes secret
-kubectl get secret monitoring-grafana \
-  --namespace observability \
-  --output jsonpath="{.data.admin-password}" | base64 --decode && echo
+kubectl get gateway eg -n default
+kubectl get secret monitoring-grafana -n observability \
+  -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
 
-![install-pt4.jpg](Screenshots/install-pt4.jpg)
+- Grafana: `http://<envoy-gateway-address>/grafana/`
+- Username: `admin`
+- Prometheus: ClusterIP only
+
+```bash
+kubectl -n observability port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090
+```
+
+Then open `http://127.0.0.1:9090`.
+
+![install-pt4.jpg](images/install-pt4.jpg)
 
 ---
 
-## 🎥 Demo Video
+## Security and self-healing (what changed)
 
-A full walkthrough of deployment and monitoring verification is available:  
+**Least privilege**
+
+- Node role no longer has `AmazonEKS_CNI_Policy`; CNI uses IRSA on `aws-node`
+- EBS CSI uses a pinned local IAM policy and IRSA on `ebs-csi-controller-sa`
+- Prometheus and Grafana are ClusterIP; only Envoy should be internet-facing
+- Grafana anonymous auth is off; sign-up is off
+- EKS secrets encrypted with a dedicated KMS key
+- Instance metadata requires IMDSv2 with hop limit 1 (pods cannot steal node credentials)
+- EKS public API CIDRs are a variable — set them to your IP
+
+**Self-healing**
+
+- Grafana: 2 replicas, probes, PDB `minAvailable: 1`, anti-affinity
+- Envoy Gateway: 2 replicas plus PDBs
+- Prometheus/Alertmanager: Kubernetes probes (chart defaults) and persistent gp3 volumes so a rescheduled pod keeps data
+- Node group `min_size = 2` across two AZs (the old `min_size = 0` could drain the cluster)
+
+---
+
+## Uninstall
+
+```bash
+./scripts/uninstall-monitoring.sh
+cd terraform && terraform destroy
+```
+
+![uninstall-pt1.jpg](images/uninstall-pt1.jpg)
+![uninstall-pt2.jpg](images/uninstall-pt2.jpg)
+![terraform-destroy.jpg](images/terraform-destroy.jpg)
+
+---
+
+## Troubleshooting
+
+| Issue | Cause | Fix |
+| --- | --- | --- |
+| `gp3` missing | Terraform not applied | Apply `terraform/` first |
+| Envoy address pending | NLB provisioning | Wait 3–5 min, `kubectl get gateway eg -n default` |
+| Grafana 404 at `/grafana` | Route or subpath | Confirm HTTPRoute and `grafana.ini` `serve_from_sub_path` |
+| Password empty | Secret not ready | Wait for Grafana pods Ready, then re-run the secret command |
+| Helm release exists | Partial install | `./scripts/uninstall-monitoring.sh` then install again |
+| Namespace stuck Terminating | CRD finalizers | See `docs/DEPLOY.md` |
+
+---
+
+## Demo
 
 [![Armageddon Demo](https://img.youtube.com/vi/Ur_WtZtClqc/0.jpg)](https://www.youtube.com/watch?v=Ur_WtZtClqc)
 
 ---
 
-## 🧠 Key Benefits
-
-- 🔁 **Automation**: One-click install/uninstall reduces manual toil.  
-- 🧍‍♂️ **Team Efficiency**: Network team can focus on analysis, not setup.  
-- 📊 **Observability**: Centralized monitoring of Envoy metrics via Prometheus + Grafana.  
-- 🛡 **Consistency**: Infrastructure as Code ensures repeatable deployments.
-
----
-
-## 🧼 Uninstall Instructions
-
-To cleanly remove Envoy, Prometheus, and Grafana:
-
-```bash
-chmod +x AB-uninstall-kubernetes-monitoring.sh
-./AB-uninstall-kubernetes-monitoring.sh
-```
-
-This script:
-
-- Removes Helm releases safely.  
-- Deletes namespaces (`observability` and `envoy-gateway-system`).  
-- Waits for graceful termination.  
-- Supports re-runs without errors.
-
-![uninstall-pt1.jpg](Screenshots/uninstall-pt1.jpg)
-![uninstall-pt2.jpg](Screenshots/uninstall-pt2.jpg)
-
----
-
-## 🛠 Troubleshooting
-
-| Issue | Cause | Resolution |
-|------|------|-----------|
-| `LoadBalancer hostname pending` | AWS ELB creation delay | Wait 3–5 minutes and re-run `kubectl get svc -n observability`. |
-| `Grafana password not found` | Secret not yet created | Run the password command again after pods stabilize. |
-| `Helm release already exists` | Script rerun without uninstall | Run the uninstall script first, then re-run install. |
-| `Namespace stuck in Terminating` | Finalizer on CRD or resource | Run `kubectl get ns &lt;name&gt; -o json \| jq '.spec.finalizers=[]' \| kubectl replace --raw "/api/v1/namespaces/&lt;name&gt;/finalize" -f -`. |
-| `Metrics not visible in Grafana` | ServiceMonitor mismatch | Ensure the ServiceMonitor selector matches Envoy labels. |
-
----
-
-## ✍️ Authors & Acknowledgments
+## Authors
 
 - **Author:** T.I.Q.S.
 - **Group Leader:** John Sweeney
-
----

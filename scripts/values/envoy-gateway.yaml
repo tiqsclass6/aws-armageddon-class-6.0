@@ -1,0 +1,13 @@
+# Envoy Gateway control plane — two replicas, probes, non-root.
+# Chart keys follow gateway-helm v1.5.x.
+
+deployment:
+  replicas: 2
+  envoyGateway:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
