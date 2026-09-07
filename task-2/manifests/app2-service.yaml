@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: app2-svc
+  namespace: task2-ns
+  labels:
+    app: app2
+spec:
+  type: ClusterIP
+  selector:
+    app: app2
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082

@@ -26,13 +26,29 @@ It merges three major deliverables:
 
 Together, they demonstrate automated provisioning, container orchestration, and live cluster visibility for cloud engineering teams.
 
+Clone this repository so the working tree matches a local **Armageddon 2.0** folder (Terraform + Kubernetes labs in one checkout):
+
+```plaintext
+Armageddon 2.0/
+├── README.md
+├── .gitignore
+├── diagrams/
+│   ├── task1-diagram.png
+│   └── task2-diagram.png
+├── task-1/                  # Observability stack (Envoy, Prometheus, Grafana)
+└── task-2/                  # Flask apps → ECR → EKS
+```
+
+The historical `task-1` and `task-2` git branches remain available. The folders on this tree are the same labs, so a single checkout of `main` matches the local Armageddon 2.0 directory.
+
 ---
 
 ## 📚 References  
 
-- [Task 1 — Automated Kubernetes Observability Stack](https://github.com/tiqsclass6/aws-armageddon-class-6.0/tree/task-1)  
+- [Task 1 — Automated Kubernetes Observability Stack](./task-1)  
   Based on: Envoy Gateway, Prometheus, Grafana Helm Charts, AWS EKS, Terraform provisioning modules.  
-  Includes custom installation/cleanup scripts: `AA-install-kubernetes-monitoring.sh`, `AB-uninstall-kubernetes-monitoring.sh`.
+  Includes custom installation/cleanup scripts: `AA-install-kubernetes-monitoring.sh`, `AB-uninstall-kubernetes-monitoring.sh`.  
+  Branch copy: [task-1](https://github.com/tiqsclass6/aws-armageddon-class-6.0/tree/task-1).
 
 - Supporting Documentation:
   - Kubernetes Concepts —[Kubernetes Docs](https://kubernetes.io/docs/concepts/)
@@ -41,9 +57,10 @@ Together, they demonstrate automated provisioning, container orchestration, and 
   - Prometheus Overview — [Prometheus Docs](https://prometheus.io/docs/introduction/overview/)
   - Grafana OSS and Enterprise — [Grafana Docs](https://grafana.com/docs/grafana/latest/)
 
-- [Task 2 — Docker-Based Flask Apps → AWS ECR → AWS ECS](https://github.com/tiqsclass6/aws-armageddon-class-6.0/tree/task-2)  
+- [Task 2 — Docker-Based Flask Apps → AWS ECR → AWS ECS](./task-2)  
   Built using: Docker, Flask, Pillow, Amazon ECR, ECS, and Kubernetes manifests for deployment.  
-  Includes automation scripts: `deploy-all-apps.sh`, `destroy-all-apps.sh`.
+  Includes automation scripts: `deploy-all-apps.sh`, `destroy-all-apps.sh`.  
+  Branch copy: [task-2](https://github.com/tiqsclass6/aws-armageddon-class-6.0/tree/task-2).
 
 - Supporting Documentation:  
   - AWS EKS Documentation — [EKS User Guide](https://docs.aws.amazon.com/eks/latest/userguide/)  
@@ -70,7 +87,7 @@ Deliver a **secure, automated, and observable AWS ecosystem** capable of:
 
 ## 🔗 Branches
 
-### 🌍 [Branch Task 1 - (Automated Kubernetes Observability Stack)](https://github.com/tiqsclass6/aws-armageddon-class-6.0/tree/task-1)
+### 🌍 [Task 1 - Automated Kubernetes Observability Stack](./task-1)
 
 ![task1-diagram](/diagrams/task1-diagram.png)
 
@@ -85,7 +102,7 @@ Deliver a **secure, automated, and observable AWS ecosystem** capable of:
 
 ---
 
-## 🎵 [Branch Task 2 — Docker-Based Flask Applications → AWS ECR → AWS ECS)](https://github.com/tiqsclass6/aws-armageddon-class-6.0/tree/task-2)  
+## 🎵 [Task 2 — Docker-Based Flask Applications → AWS ECR → AWS ECS](./task-2)  
 
 ![task2-diagram](/diagrams/task2-diagram.png)
 
